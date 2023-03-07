@@ -1,47 +1,48 @@
-wget -O ng.sh https://github.com/kmille36/Docker-Ubuntu-Desktop-NoMachine/raw/main/ngrok.sh > /dev/null 2>&1
-chmod +x ng.sh
-./ng.sh
+#!/bin/bash
 
+# Install Chrome Remote Desktop
+wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
+sudo dpkg --install chrome-remote-desktop_current_amd64.deb
+sudo apt-get --assume-yes install --fix-broken
 
-function goto
-{
-    label=$1
-    cd 
-    cmd=$(sed -n "/^:[[:blank:]][[:blank:]]*${label}/{:a;n;p;ba};" $0 | 
-          grep -v ':$')
-    eval "$cmd"
-    exit
-}
+# Authorize the user
+echo "Please enter the Google account to authorize:"
+read GOOGLE_ACCOUNT
+sudo adduser $GOOGLE_ACCOUNT chrome-remote-desktop
+sudo systemctl restart chrome-remote-desktop
 
-: ngrok
-clear
-echo "Go to: https://dashboard.ngrok.com/get-started/your-authtoken"
-read -p "Paste Ngrok Authtoken: " CRP
-./ngrok authtoken $CRP 
+# Download and extract the Chrome Remote Desktop installer
+wget -O crd_installer.exe "https://dl.google.com/chrome-remote-desktop/chromeremotedesktophost.msi"
+sudo apt-get --assume-yes install unzip
+unzip -p crd_installer.exe > crd_installer.zip
 
-clear
-echo "Repo: https://github.com/kmille36/Docker-Ubuntu-Desktop-NoMachine"
-echo "======================="
-echo "choose ngrok region (for better connection)."
-echo "======================="
-echo "us - United States (Ohio)"
-echo "eu - Europe (Frankfurt)"
-echo "ap - Asia/Pacific (Singapore)"
-echo "au - Australia (Sydney)"
-echo "sa - South America (Sao Paulo)"
-echo "jp - Japan (Tokyo)"
-echo "in - India (Mumbai)"
-read -p "choose ngrok region: " CRP
-./ngrok tcp --region $CRP 4000 &>/dev/null &
-sleep 1
-if curl --silent --show-error http://127.0.0.1:4040/api/tunnels  > /dev/null 2>&1; then echo OK; else echo "Ngrok Error! Please try again!" && sleep 1 && goto ngrok; fi
-docker run --rm -d --network host --privileged --name nomachine-xfce4 -e PASSWORD=123456 -e USER=user --cap-add=SYS_PTRACE --shm-size=1g thuonghai2711/nomachine-ubuntu-desktop:wine
-clear
-echo "NoMachine: https://www.nomachine.com/download"
-echo Done! NoMachine Information:
-echo IP Address:
-curl --silent --show-error http://127.0.0.1:4040/api/tunnels | sed -nE 's/.*public_url":"tcp:..([^"]*).*/\1/p' 
-echo User: user
-echo Passwd: 123456
-echo "VM can't connect? Restart Cloud Shell then Re-run script."
-seq 1 43200 | while read i; do echo -en "\r Running .     $i s /43200 s";sleep 0.1;echo -en "\r Running ..    $i s /43200 s";sleep 0.1;echo -en "\r Running ...   $i s /43200 s";sleep 0.1;echo -en "\r Running ....  $i s /43200 s";sleep 0.1;echo -en "\r Running ..... $i s /43200 s";sleep 0.1;echo -en "\r Running     . $i s /43200 s";sleep 0.1;echo -en "\r Running  .... $i s /43200 s";sleep 0.1;echo -en "\r Running   ... $i s /43200 s";sleep 0.1;echo -en "\r Running    .. $i s /43200 s";sleep 0.1;echo -en "\r Running     . $i s /43200 s";sleep 0.1; done
+# Install Wine for running Windows applications
+sudo dpkg --add-architecture i386
+wget -qO - https://dl.winehq.org/wine-builds/winehq.key | sudo apt-key add -
+sudo apt-add-repository 'deb https://dl.winehq.org/wine-builds/ubuntu/ focal main'
+sudo apt-get update
+sudo apt-get --assume-yes install winehq-stable
+
+# Install dependencies for NoMachine
+sudo apt-get --assume-yes install x11-xserver-utils xdg-utils
+
+# Download and extract NoMachine
+wget -O nomachine.deb "https://download.nomachine.com/download/7.6/Linux/nomachine_7.6.2_4_amd64.deb"
+sudo dpkg --install nomachine.deb
+
+# Connect to the remote Windows machine
+echo "Please enter the name or IP address of the Windows machine:"
+read WINDOWS_MACHINE
+echo "Please enter the username for the Windows machine:"
+read WINDOWS_USER
+echo "Please enter the password for the Windows machine:"
+read WINDOWS_PASSWORD
+/opt/google/chrome-remote-desktop/chrome-remote-desktop --start \
+    --pin=$WINDOWS_PASSWORD \
+    --name=$WINDOWS_MACHINE \
+    --code="akuhnetw7X64" \
+    --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
+    --create-session --no-host-check \
+    --monitor="1920x1080" \
+    --guest \
+    -- bash -c "export DISPLAY=:20; wine explorer \\\\${WINDOWS_MACHINE}\\c\$"
